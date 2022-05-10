@@ -1,0 +1,248 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {},
+  "variables": {
+    "location": "[resourceGroup().location]",
+    "hubVNetName": "hub-vnet",
+    "hubServicesSubnetName": "SharedServicesSubnet",
+    "hubBastionSubnetName": "AzureBastionSubnet",
+    "hubFwSubnetName": "AzureFirewallSubnet",
+    "hubVNetPrefix": "10.0.0.0/16",
+    "hubServicesSubnetPrefix": "10.0.1.0/24",
+    "hubBastionSubnetPrefix": "10.0.2.0/27",
+    "hubFwSubnetPrefix": "10.0.3.0/26",
+    "spoke1VNetName": "spoke-vnet-01",
+    "spoke1ServicesSubnetName": "SharedServicesSubnet",
+    "spoke1VNetPrefix": "172.16.0.0/16",
+    "spoke1ServicesSubnetPrefix": "172.16.0.0/24",
+    "spoke2VNetName": "spoke-vnet-02",
+    "spoke2ServicesSubnetName": "DCServicesSubnet",
+    "spoke2VNetPrefix": "192.168.0.0/16",
+    "spoke2ServicesSubnetPrefix": "192.168.0.0/24",
+    "routeTableName": "main-route-table",
+    "nsg1Name": "nsg-01",
+    "nsg2Name": "nsg-02"
+  },
+  "resources": [
+    {
+      "name": "[variables('hubVNetName')]",
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2018-08-01",
+      "location": "[variables('location')]",
+      "tags": {},
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "[variables('hubVNetPrefix')]"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "[variables('hubServicesSubnetName')]",
+            "properties": {
+              "addressPrefix": "[variables('hubServicesSubnetPrefix')]"
+            }
+          },
+          {
+            "name": "[variables('hubBastionSubnetName')]",
+            "properties": {
+              "addressPrefix": "[variables('hubBastionSubnetPrefix')]"
+            }
+          },
+          {
+            "name": "[variables('hubFwSubnetName')]",
+            "properties": {
+              "addressPrefix": "[variables('hubFwSubnetPrefix')]"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "[variables('spoke1VNetName')]",
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2018-08-01",
+      "location": "[variables('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsg1Name'))]"
+      ],
+      "tags": {},
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "[variables('spoke1VNetPrefix')]"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "[variables('spoke1ServicesSubnetName')]",
+            "properties": {
+              "addressPrefix": "[variables('spoke1ServicesSubnetPrefix')]",
+              "networkSecurityGroup": {
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsg1Name'))]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "[variables('spoke2VNetName')]",
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2018-08-01",
+      "location": "[variables('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsg2Name'))]"
+      ],
+      "tags": {},
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "[variables('spoke2VNetPrefix')]"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "[variables('spoke2ServicesSubnetName')]",
+            "properties": {
+              "addressPrefix": "[variables('spoke2ServicesSubnetPrefix')]",
+              "networkSecurityGroup": {
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsg2Name'))]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "[concat(variables('hubVNetName'), '/peer-to-', variables('spoke1VNetName'))]",
+      "type": "Microsoft.Network/virtualNetworks/virtualNetworkPeerings",
+      "apiVersion": "2019-04-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('hubVNetName'))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('spoke1VNetName'))]"
+      ],
+      "properties": {
+        "remoteVirtualNetwork": {
+          "id": "[resourceId('Microsoft.Network/virtualNetworks', variables('spoke1VNetName'))]"
+        },
+        "allowVirtualNetworkAccess": true,
+        "allowForwardedTraffic": false,
+        "allowGatewayTransit": false,
+        "useRemoteGateways": false
+      }
+    },
+    {
+      "name": "[concat(variables('spoke1VNetName'), '/peer-to-', variables('hubVNetName'))]",
+      "type": "Microsoft.Network/virtualNetworks/virtualNetworkPeerings",
+      "apiVersion": "2019-04-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('hubVNetName'))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('spoke1VNetName'))]"
+      ],
+      "properties": {
+        "remoteVirtualNetwork": {
+          "id": "[resourceId('Microsoft.Network/virtualNetworks', variables('hubVNetName'))]"
+        },
+        "allowVirtualNetworkAccess": true,
+        "allowForwardedTraffic": false,
+        "allowGatewayTransit": false,
+        "useRemoteGateways": false
+      }
+    },
+    {
+      "name": "[concat(variables('hubVNetName'), '/peer-to-', variables('spoke2VNetName'))]",
+      "type": "Microsoft.Network/virtualNetworks/virtualNetworkPeerings",
+      "apiVersion": "2019-04-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('hubVNetName'))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('spoke2VNetName'))]"
+      ],
+      "properties": {
+        "remoteVirtualNetwork": {
+          "id": "[resourceId('Microsoft.Network/virtualNetworks', variables('spoke2VNetName'))]"
+        },
+        "allowVirtualNetworkAccess": true,
+        "allowForwardedTraffic": true,
+        "allowGatewayTransit": false,
+        "useRemoteGateways": false
+      }
+    },
+    {
+      "name": "[concat(variables('spoke2VNetName'), '/peer-to-', variables('hubVNetName'))]",
+      "type": "Microsoft.Network/virtualNetworks/virtualNetworkPeerings",
+      "apiVersion": "2019-04-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('hubVNetName'))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('spoke2VNetName'))]"
+      ],
+      "properties": {
+        "remoteVirtualNetwork": {
+          "id": "[resourceId('Microsoft.Network/virtualNetworks', variables('hubVNetName'))]"
+        },
+        "allowVirtualNetworkAccess": false,
+        "allowForwardedTraffic": true,
+        "allowGatewayTransit": false,
+        "useRemoteGateways": false
+      }
+    },
+    {
+      "name": "[variables('routeTableName')]",
+      "type": "Microsoft.Network/routeTables",
+      "apiVersion": "2018-08-01",
+      "location": "[resourceGroup().location]",
+      "tags": {},
+      "properties": {}
+    },
+    {
+      "name": "[variables('nsg1Name')]",
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2020-11-01",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "AllowAny",
+            "properties": {
+              "description": "Allow Any traffic Inbound",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "*",
+              "access": "Allow",
+              "priority": 100,
+              "direction": "Inbound"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "[variables('nsg2Name')]",
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2020-11-01",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "AllowAny",
+            "properties": {
+              "description": "Allow Any traffic Inbound",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "*",
+              "access": "Allow",
+              "priority": 100,
+              "direction": "Inbound"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "outputs": {}
+}

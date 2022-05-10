@@ -1,0 +1,129 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "adminUsername": {
+      "type": "string",
+      "metadata": {
+        "description": "Admin Username for the VMs"
+      }
+    },
+    "adminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Admin Password for the VMs"
+      }
+    },
+    "_artifactsLocation": {
+      "type": "string",
+      "defaultValue": "https://raw.githubusercontent.com/mrcloudchase/Azure/master/",
+      "metadata": {
+        "description": "Artifacts Location"
+      }
+    },
+    "exisitingVNetName": {
+       "type": "string",
+       "metadata": {
+            "description": "Name of existing VNet to use"
+        }
+    },
+    "existingSubnetName": {
+         "type": "string",
+            "metadata": {
+                "description": "Name of existing Subnet to use"
+        }
+    },
+    "_artifactsLocationSasToken": {
+      "type": "string",
+      "metadata": {
+        "description": "Artifacts Location SAS Token"
+      }
+    }
+  },
+  "functions": [],
+  "variables": {
+    "customData": "[concat('#include\n', uri(parameters('_artifactsLocation'), concat('cloud-init.txt', parameters('_artifactsLocationSasToken'))))]",
+    "rg": "[resourceGroup().location]",
+    "subnetRef": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('exisitingVNetName'), parameters('existingSubnetName'))]",
+    "vmName": "web-vm-",
+    "vmSize": "standard_b2s",
+    "vmCount": 2
+  },
+  "resources": [
+    {
+      "name": "[concat(variables('vmName'), 'nic-0', copyIndex(1))]",
+      "type": "Microsoft.Network/networkInterfaces",
+      "apiVersion": "2020-11-01",
+      "location": "[variables('rg')]",
+      "tags": {},
+      "copy": {
+        "name": "vmNICCopy",
+        "count": "[variables('vmCount')]"
+      },
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipConfig1",
+            "properties": {
+              "privateIPAllocationMethod": "Dynamic",
+              "subnet": {
+                "id": "[variables('subnetRef')]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "[concat(variables('vmName'), '0', copyIndex(1))]",
+      "type": "Microsoft.Compute/virtualMachines",
+      "apiVersion": "2021-03-01",
+      "location": "[variables('rg')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkInterfaces', concat(variables('vmName'), 'nic-0', copyIndex(1)))]"
+      ],
+      "tags": {},
+      "copy": {
+        "name": "vmCopy",
+        "count": "[variables('vmCount')]"
+      },
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[variables('vmSize')]"
+        },
+        "osProfile": {
+          "computerName": "[concat(variables('vmName'), '0', copyIndex(1))]",
+          "adminUsername": "[parameters('adminUsername')]",
+          "adminPassword": "[parameters('adminPassword')]",
+          "customData": "[base64(variables('customData'))]"
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "Canonical",
+            "offer": "UbuntuServer",
+            "sku": "18.04-LTS",
+            "version": "latest"
+          },
+          "osDisk": {
+            "name": "[concat(variables('vmName'), 'disk-0', copyIndex(1))]",
+            "caching": "ReadWrite",
+            "createOption": "FromImage"
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(variables('vmName'), 'nic-0', copyIndex(1)))]"
+            }
+          ]
+        },
+        "diagnosticsProfile": {
+          "bootDiagnostics": {
+            "enabled": false
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {}
+}
